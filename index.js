@@ -1,31 +1,41 @@
+// index.js
 const express = require("express");
-const ytdl    = require("ytdl-core");
-const path    = require("path");
-const app     = express();
+const ytdl = require("ytdl-core");
+const cors = require("cors");
 
+const app = express();
+app.use(cors()); // CORS issue এড়াতে
 
-app.use(express.static(path.join(__dirname, "public")));
+// Health check
+app.get("/", (req, res) => {
+  res.send("Server is running! Use /download?url=VIDEO_URL");
+});
 
-
+// /download?url=YouTube_URL
 app.get("/download", async (req, res) => {
   const videoURL = req.query.url;
   if (!videoURL || !ytdl.validateURL(videoURL)) {
     return res.status(400).send("Invalid or missing 'url' parameter");
   }
+
   try {
-    const info  = await ytdl.getInfo(videoURL);
+    const info = await ytdl.getInfo(videoURL);
+    const format = ytdl.chooseFormat(info.formats, { quality: "highestvideo" });
+
     const title = info.videoDetails.title.replace(/[\\/:*?"<>|]/g, "_");
-    res.header(
-      "Content-Disposition",
-      `attachment; filename="${title}.mp4"`
-    );
-    ytdl(videoURL, { quality: "highest" }).pipe(res);
+    res.setHeader("Content-Disposition", `attachment; filename="${title}.mp4"`);
+    res.setHeader("Content-Type", "video/mp4");
+
+    ytdl(videoURL, {
+      format: format,
+      filter: "audioandvideo",
+      quality: "highest"
+    }).pipe(res);
   } catch (err) {
     console.error(err);
     res.status(500).send("Error downloading video");
   }
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
