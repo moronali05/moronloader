@@ -1,43 +1,40 @@
-// index.js
-const express = require("express");
-const ytdl = require("ytdl-core");
-const cors = require("cors");
+/* song.js - GoatBot V2 /song command handler */
 
-const app = express();
-app.use(cors()); // CORS issue এড়াতে
+const ytdl = require('ytdl-core');
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("Server is running! Use /download?url=VIDEO_URL");
-});
+module.exports = (bot, botUsername) => {
+  // Handle /song command in groups and private chats
+  // Use regex to match /song and optional @BotUsername
+  const cmdRegex = new RegExp(`\\/song(?:@${botUsername})?\\s+(.+)`, 'i');
 
-// /download?url=YouTube_URL
-app.get("/download", async (req, res) => {
-  const videoURL = req.query.url;
-  if (!videoURL || !ytdl.validateURL(videoURL)) {
-    return res.status(400).send("Invalid or missing 'url' parameter");
-  }
+  bot.onText(cmdRegex, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const url = match[1].trim();
 
-  try {
-    const info = await ytdl.getInfo(videoURL);
-    const format = ytdl.chooseFormat(info.formats, { quality: "highestvideo" });
+    // Validate YouTube URL
+    if (!ytdl.validateURL(url)) {
+      return bot.sendMessage(chatId, 'দয়া করে একটি বৈধ YouTube URL দিতে বলো।');
+    }
 
-    const title = info.videoDetails.title.replace(/[\\/:*?"<>|]/g, "_");
-    res.setHeader("Content-Disposition", `attachment; filename="${title}.mp4"`);
-    res.setHeader("Content-Type", "video/mp4");
+    try {
+      // Get video info for title
+      const info = await ytdl.getInfo(url);
+      const title = info.videoDetails.title.replace(/[\\/:*?"<>|]/g, '');
 
-    ytdl(videoURL, {
-      format: format,
-      filter: "audioandvideo",
-      quality: "highest"
-    }).pipe(res);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error downloading video");
-  }
-});
+      // Stream audio only
+      const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+      // Send audio file
+      await bot.sendAudio(chatId, stream, {
+        title: title,
+        performer: 'GoatBot V2'
+      }, {
+        filename: `${title}.mp3`,
+        contentType: 'audio/mpeg'
+      });
+    } catch (err) {
+      console.error('Error in /song command:', err);
+      bot.sendMessage(chatId, 'দুঃখিত, অডিও ডাউনলোডে সমস্যা হয়েছে। পরে চেষ্টা করো।');
+    }
+  });
+};
